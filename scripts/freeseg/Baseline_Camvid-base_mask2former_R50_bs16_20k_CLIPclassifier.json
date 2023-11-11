@@ -1,0 +1,12 @@
+{
+"name": "Baseline_Camvid-base_mask2former_R50_bs16_20k_CLIPclassifier",
+"cwd": "/media/data1/wjy/projects/FreeSeg",
+"script": "/media/data1/wjy/projects/FreeSeg/train_net.py",
+"args": "--config-file configs/Baseline_Camvid-base_mask2former_R50_bs16_20k_CLIPclassifier.yaml --num-gpus 1",
+"interpreter": "/media/data1/wjy/projects/crackSeg/media/data1/wjy/miniconda/envs/mage/bin/python",
+"merge_logs": true,
+"out_file": "/media/data1/wjy/projects/FreeSeg/output/Baseline_Camvid-base_mask2former_R50_bs16_20k_CLIPclassifier/info.log",
+"env": {"CUDA_VISIBLE_DEVICES":"0", "DETECTRON2_DATASETS":"/media/data2/wjy/datasets/"},
+"autorestart" :false
+}
+

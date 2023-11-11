@@ -1,0 +1,12 @@
+{
+"name": "Baseline_Camvid-base_mask2former_R50_bs16_20k",
+"cwd": "/media/data1/wjy/projects/FreeSeg",
+"script": "/media/data1/wjy/projects/FreeSeg/train_net.py",
+"args": "--config-file configs/Camvid/Baseline_Camvid-base_mask2former_R50_bs16_20k.yaml --num-gpus 1",
+"interpreter": "/media/data1/wjy/projects/crackSeg/media/data1/wjy/miniconda/envs/mage/bin/python",
+"merge_logs": true,
+"out_file": "/media/data1/wjy/projects/FreeSeg/freeseg_output/Baseline_Camvid-base_mask2former_R50_bs16_20k/info_without_learnedPrompt.log",
+"env": {"CUDA_VISIBLE_DEVICES":"1", "DETECTRON2_DATASETS":"/media/data2/wjy/datasets/"},
+"autorestart" :false
+}
+

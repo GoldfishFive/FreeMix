@@ -1,0 +1,11 @@
+{
+"name": "FreeMix_GID15Pot_mean_selfsup_bs4_40k.yaml",
+"cwd": "/media/data1/wjy/projects/FreeSeg",
+"script": "/media/data1/wjy/projects/FreeSeg/train_freemix.py",
+"args": "--config-file configs/GID15Pot/FreeMix_GID15Pot_mean_selfsup_bs4_40k.yaml --num-gpus 1",
+"interpreter": "/media/data1/wjy/projects/crackSeg/media/data1/wjy/miniconda/envs/mage/bin/python",
+"merge_logs": true,
+"out_file": "/media/data1/wjy/projects/FreeSeg/freeseg_output/GID15Pot/FreeMix_GID15Pot_mean_selfsup_bs4_40k/info.log",
+"env": {"CUDA_VISIBLE_DEVICES":"0", "DETECTRON2_DATASETS":"/media/data2/wjy/datasets/"},
+"autorestart" :false
+}

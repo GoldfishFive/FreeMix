@@ -1,0 +1,12 @@
+{
+"name": "Baseline_CamPot-base_mask2former_R50_bs16_20k_learned_prompt",
+"cwd": "/media/data1/wjy/projects/FreeSeg",
+"script": "/media/data1/wjy/projects/FreeSeg/train_net.py",
+"args": "--config-file configs/CamPot/Baseline_CamPot-base_mask2former_R50_bs16_20k_learned_prompt.yaml --num-gpus 1 MODEL.CLIP_ADAPTER.PROMPT_CHECKPOINT ./freeseg_output/campot/CamPot_mask2former_learn_prompt_bs16_10k/model_0002999.pth",
+"interpreter": "/media/data1/wjy/projects/crackSeg/media/data1/wjy/miniconda/envs/mage/bin/python",
+"merge_logs": true,
+"out_file": "/media/data1/wjy/projects/FreeSeg/freeseg_output/campot/Baseline_CamPot-base_mask2former_R50_bs16_20k_learned_prompt/info.log",
+"env": {"CUDA_VISIBLE_DEVICES":"0", "DETECTRON2_DATASETS":"/media/data2/wjy/datasets/"},
+"autorestart" :false
+}
+

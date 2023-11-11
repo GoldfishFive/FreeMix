@@ -1,0 +1,342 @@
+CUDNN_BENCHMARK: false
+TRAINER: "FreeMix_Trainer"
+GLOBAL:
+  HACK: 1.0
+# misc
+LOADER:
+  JOINT: True
+  KEY_DATASET: 'potsdam'
+DATASETS:
+  DETECTIONS_PER_IMAGE: 100
+  PRECOMPUTED_PROPOSAL_TOPK_TEST: 1000
+  PRECOMPUTED_PROPOSAL_TOPK_TRAIN: 2000
+  PROPOSAL_FILES_TEST: []
+  PROPOSAL_FILES_TRAIN: []
+  SAMPLE_PER_CLASS: -1
+  SAMPLE_SEED: 0
+  TEST:
+#  - campot_sem_seg_test
+#  - camvid_sem_seg_test
+  - potsdam_sem_seg_test
+  TRAIN:
+  - camvid_base_sem_seg_train
+  - potsdam_base_sem_seg_train
+MISSION_NAME:
+  - semantic segmentation.
+Camvid:
+  INPUT:
+    DATASET_MAPPER_NAME: camvid_mask_former_semantic
+    COLOR_AUG_SSD: true
+    CROP:
+      ENABLED: true
+      SINGLE_CATEGORY_MAX_AREA: 1.0
+      SIZE:
+        - 512
+        - 512
+      TYPE: absolute
+    FORMAT: RGB
+    IMAGE_SIZE: 1024
+    MASK_FORMAT: polygon
+    MAX_SCALE: 2.0
+    MAX_SIZE_TEST: 2048
+    MAX_SIZE_TRAIN: 2048
+    MIN_SCALE: 0.1
+    MIN_SIZE_TEST: 512
+    MIN_SIZE_TRAIN:
+      - 320
+      - 384
+      - 448
+      - 512
+      - 576
+      - 640
+      - 704
+      - 768
+      - 832
+      - 896
+      - 960
+    MIN_SIZE_TRAIN_SAMPLING: choice
+    RANDOM_FLIP: horizontal
+    SIZE_DIVISIBILITY: 512
+  TEST:
+    AUG:
+      ENABLED: false
+      FLIP: true
+      MAX_SIZE: 3584
+      MIN_SIZES:
+        - 256
+        - 384
+        - 512
+        - 640
+        - 768
+        - 896
+    DENSE_CRF: false
+    EVAL_PERIOD: 10000
+    EXPECTED_RESULTS: [ ]
+    KEYPOINT_OKS_SIGMAS: [ ]
+    OPTIM:
+      LR: 0.001
+    PRECISE_BN:
+      ENABLED: false
+      NUM_ITER: 200
+    SLIDING_OVERLAP: 0.6666666666666666
+    SLIDING_TILE_SIZE: 224
+    SLIDING_WINDOW: false
+  DATALOADER:
+    ASPECT_RATIO_GROUPING: true
+    FILTER_EMPTY_ANNOTATIONS: true
+    NUM_WORKERS: 4
+    REPEAT_THRESHOLD: 0.0
+    SAMPLER_TRAIN: TrainingSampler
+Potsdam:
+  INPUT:
+    DATASET_MAPPER_NAME: potsdam_mask_former_semantic
+    COLOR_AUG_SSD: true
+    CROP:
+      ENABLED: true
+      SINGLE_CATEGORY_MAX_AREA: 1.0
+      SIZE:
+        - 512
+        - 512
+      TYPE: absolute
+    FORMAT: RGB
+    IMAGE_SIZE: 1024
+    MASK_FORMAT: polygon
+    MAX_SCALE: 2.0
+    MAX_SIZE_TEST: 2048
+    MAX_SIZE_TRAIN: 2048
+    MIN_SCALE: 0.1
+    MIN_SIZE_TEST: 512
+    MIN_SIZE_TRAIN:
+      - 320
+      - 384
+      - 448
+      - 512
+      - 576
+      - 640
+      - 704
+      - 768
+      - 832
+      - 896
+      - 960
+    MIN_SIZE_TRAIN_SAMPLING: choice
+    RANDOM_FLIP: horizontal
+    SIZE_DIVISIBILITY: 512
+  TEST:
+    AUG:
+      ENABLED: false
+      FLIP: true
+      MAX_SIZE: 3584
+      MIN_SIZES:
+        - 256
+        - 384
+        - 512
+        - 640
+        - 768
+        - 896
+    DENSE_CRF: false
+    EVAL_PERIOD: 10000
+    EXPECTED_RESULTS: [ ]
+    KEYPOINT_OKS_SIGMAS: [ ]
+    OPTIM:
+      LR: 0.001
+    PRECISE_BN:
+      ENABLED: false
+      NUM_ITER: 200
+    SLIDING_OVERLAP: 0.6666666666666666
+    SLIDING_TILE_SIZE: 224
+    SLIDING_WINDOW: false
+  DATALOADER:
+    ASPECT_RATIO_GROUPING: true
+    FILTER_EMPTY_ANNOTATIONS: true
+    NUM_WORKERS: 4
+    REPEAT_THRESHOLD: 0.0
+    SAMPLER_TRAIN: TrainingSampler
+MODEL:
+  META_ARCHITECTURE: FreeMix_model
+  DEVICE: cuda
+  MASK_ON: false
+  KEYPOINT_ON: false
+  LOAD_PROPOSALS: false
+  BACKBONE:
+    FREEZE_AT: 0
+    NAME: build_resnet_backbone
+  RESNETS:
+    DEFORM_MODULATED: false
+    DEFORM_NUM_GROUPS: 1
+    DEFORM_ON_PER_STAGE:
+      - false
+      - false
+      - false
+      - false
+    DEPTH: 50
+    NORM: FrozenBN
+    NUM_GROUPS: 1
+    OUT_FEATURES:
+      - res2
+      - res3
+      - res4
+      - res5
+    RES2_OUT_CHANNELS: 256
+    RES4_DILATION: 1
+    RES5_DILATION: 1
+    RES5_MULTI_GRID:
+      - 1
+      - 1
+      - 1
+    STEM_OUT_CHANNELS: 64
+    STEM_TYPE: basic
+    STRIDE_IN_1X1: false
+    WIDTH_PER_GROUP: 64
+  CLIP_ADAPTER:
+    CLIP_ENSEMBLE: true
+    CLIP_ENSEMBLE_WEIGHT: 0.7
+    CLIP_MODEL_NAME: ViT-B/16
+    MASK_EXPAND_RATIO: 1.0
+    MASK_FILL: mean
+    MASK_MATTING: false
+    MASK_THR: 0.5
+    PREDEFINED_PROMPT_TEMPLATES:
+    - a sculpture of a {}.
+    PROMPT_CHECKPOINT: ''
+    PROMPT_DIM: 512
+    PROMPT_LEARNER: learnable
+    PROMPT_SHAPE:
+    - 16
+    - 0
+    REGION_CLIP_ADAPTER:
+      CLIP_MODEL_NAME: ViT-B/16
+      PREDEFINED_PROMPT_TEMPLATES:
+      - a photo of a {}.
+      PROMPT_CHECKPOINT: ''
+      PROMPT_DIM: 512
+      PROMPT_LEARNER: learnable
+      PROMPT_SHAPE:
+      - 16
+      - 0
+    REGION_RESIZED: true
+    SEPERATE_ADAPTER: false
+    TASK_PROMPT_SHAPE: 8
+  MASK_FORMER:
+    CLASS_WEIGHT: 2.0
+    DEC_LAYERS: 10
+    DEEP_SUPERVISION: true
+    DICE_WEIGHT: 5.0
+    DIM_FEEDFORWARD: 2048
+    DROPOUT: 0.1
+    ENC_LAYERS: 0
+    ENFORCE_INPUT_PROJ: false
+    HIDDEN_DIM: 256
+    IMPORTANCE_SAMPLE_RATIO: 0.75
+    MASK_WEIGHT: 20.0
+    NHEADS: 8
+    NO_OBJECT_WEIGHT: 0.1 # 0.1
+    NUM_OBJECT_QUERIES: 100
+    OVERSAMPLE_RATIO: 3.0
+    PRE_NORM: false
+    SIZE_DIVISIBILITY: 32
+    TEST:
+      INSTANCE_ON: false
+      OBJECT_MASK_THRESHOLD: 0.8
+      OVERLAP_THRESHOLD: 0.8
+      PANOPTIC_ON: false
+      SEMANTIC_ON: false
+      SEM_SEG_POSTPROCESSING_BEFORE_INFERENCE: false
+    TRAIN_NUM_POINTS: 12544
+    TRANSFORMER_DECODER_NAME: MultiScaleMaskedTransformerDecoder
+    TRANSFORMER_IN_FEATURE: multi_scale_pixel_decoder
+  PIXEL_MEAN:
+  - 123.675
+  - 116.28
+  - 103.53
+  PIXEL_STD:
+  - 58.395
+  - 57.12
+  - 57.375
+  SEM_SEG_HEAD:
+    ASPP_CHANNELS: 256
+    ASPP_DILATIONS:
+    - 6
+    - 12
+    - 18
+    ASPP_DROPOUT: 0.1
+    COMMON_STRIDE: 4
+    CONVS_DIM: 256
+    DEFORMABLE_TRANSFORMER_ENCODER_IN_FEATURES:
+    - res3
+    - res4
+    - res5
+    DEFORMABLE_TRANSFORMER_ENCODER_N_HEADS: 8
+    DEFORMABLE_TRANSFORMER_ENCODER_N_POINTS: 4
+    EMBEDDING_DIM: 512
+    EMBED_DIM: 2048
+    EMBED_HIDDEN_DIM: 1024
+    EMBED_LAYERS: 2
+    EMB_SIZE: 256
+    IGNORE_VALUE: 255
+    IN_FEATURES:
+    - res2
+    - res3
+    - res4
+    - res5
+    LOSS_TYPE: hard_pixel_mining
+    LOSS_WEIGHT: 1.0
+    MASK_DIM: 256
+    NAME: MaskFormerInteractionHead
+    NORM: GN
+    NUM_CLASSES: 26 #构建targetmask，计算loss时候填充的值，该值不会被计算label loss。该值应该大于等于总体的类别数量。
+    NUM_HEADS: 8
+    PIXEL_DECODER_NAME: MSDeformAttnPixelDecoder
+    PROJECT_CHANNELS:
+    - 48
+    PROJECT_FEATURES:
+    - res2
+    TRANSFORMER_ENC_LAYERS: 6
+    USE_DEPTHWISE_SEPARABLE_CONV: false
+    USE_LAYER_SCALE: true
+ORACLE: false
+OUTPUT_DIR: ./freeseg_output/campot/FreeMix_CamPot_mask2former_R50_bs4_40k/
+PSEUDO: false
+PSEUDO_FLAG_NAME: trainable_flag
+PSEUDO_REJECT_THRESHOLD: 0.0
+PSEUDO_WITH_PRIOR: true
+SEED: 42
+SOLVER:
+  AMP:
+    ENABLED: false
+  BACKBONE_MULTIPLIER: 0.1
+  BASE_LR: 0.0001
+  BASE_LR_END: 0.0
+  BIAS_LR_FACTOR: 1.0
+  CHECKPOINT_PERIOD: 10000
+  CLIP_GRADIENTS:
+    CLIP_TYPE: full_model
+    CLIP_VALUE: 0.01
+    ENABLED: true
+    NORM_TYPE: 2.0
+  GAMMA: 0.1
+  IMS_PER_BATCH: 4  # 训练时，每个数据集的batchsize大小
+  LR_SCHEDULER_NAME: WarmupPolyLR
+  MAX_ITER: 40000
+  MOMENTUM: 0.9
+  NESTEROV: false
+  NUM_DECAYS: 3
+  OPTIMIZER: ADAMW
+  POLY_LR_CONSTANT_ENDING: 0.0
+  POLY_LR_POWER: 0.9
+  REFERENCE_WORLD_SIZE: 0
+  RESCALE_INTERVAL: false
+  STEPS:
+  - 30000
+  TEST_IMS_PER_BATCH: 4
+  WARMUP_FACTOR: 1.0
+  WARMUP_ITERS: 0
+  WARMUP_METHOD: linear
+  WEIGHT_DECAY: 0.0001
+  WEIGHT_DECAY_BIAS: null
+  WEIGHT_DECAY_EMBED: 0.0
+  WEIGHT_DECAY_NORM: 0.0
+VERSION: 2
+VIS_PERIOD: 0
+WANDB:
+  NAME: null
+  PROJECT: freemix_seg
