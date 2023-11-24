@@ -5,6 +5,8 @@ import copy
 import random
 import os
 from typing import Tuple
+
+import torchvision
 from PIL import Image
 import numpy as np
 
@@ -22,6 +24,7 @@ from detectron2.utils.memory import retry_if_cuda_oom
 from detectron2.utils.logger import log_first_n
 from detectron2.utils.visualizer import Visualizer, ColorMode
 from detectron2.data.transforms import ResizeTransform
+
 from .modeling.clip_adapter import (
     ClipAdapter,
     MaskFormerClipAdapter,
@@ -31,10 +34,11 @@ from .modeling.clip_adapter.clip import build_clip_model
 from .mask_former_model import MaskFormer
 import cv2
 from third_party.MobileSAM.mobile_sam import sam_model_registry, SamAutomaticMaskGenerator
-
+from third_party.MobileSAM.mobile_sam.utils.amg import build_all_layer_point_grids
+from third_party.CLIP.clip.model import MaskCLIP
 
 @META_ARCH_REGISTRY.register()
-class FreeMix_model(MaskFormer):
+class FreeMix_BatchSAM(MaskFormer):
 
     @configurable
     def __init__(
@@ -62,7 +66,10 @@ class FreeMix_model(MaskFormer):
             test_topk_per_image: int,
             sam_branch: bool,
             sam_mask_generator,
+            sam,
+            img_resolution,
             sam_clip_model_name,
+            maskCLIP,
             clip_pixel_mean,
             clip_pixel_std,
             cfg,
@@ -113,15 +120,24 @@ class FreeMix_model(MaskFormer):
         self.clip_ensemble: bool = clip_ensemble
         self.clip_ensemble_weight: float = clip_ensemble_weight
         self.test_topk_per_image = test_topk_per_image
+        self.ma_loss = nn.SmoothL1Loss()  # SmoothL1Loss L1Loss L2Loss KLLoss
 
         self.outdir = cfg.OUTPUT_DIR
         self.sam_branch = sam_branch
         if self.sam_branch:
+            self.sam=sam
             self.sam_mask_generator = sam_mask_generator
-            clip_model = build_clip_model(sam_clip_model_name).float()
-            self.myclip_model = clip_model.visual
+            # clip_model = build_clip_model(sam_clip_model_name, frozen=False).float()
+            # self.myclip_model = clip_model.visual
             self.register_buffer("clip_pixel_mean", torch.Tensor(clip_pixel_mean).view(-1, 1, 1), False)
             self.register_buffer("clip_pixel_std", torch.Tensor(clip_pixel_std).view(-1, 1, 1), False)
+            # img resolution
+            self.img_resolution = img_resolution
+            self.input_point = torch.as_tensor(build_all_layer_point_grids(16, 0, 1)[0] * self.img_resolution,
+                                          dtype=torch.int64).cuda()
+            self.input_label = torch.tensor([1 for _ in range(self.input_point.shape[0])]).cuda()
+
+            self.maskCLIP = maskCLIP
 
         self._freeze()
 
@@ -179,12 +195,27 @@ class FreeMix_model(MaskFormer):
         if cfg.SAM_Branch:
             sam_checkpoint = "third_party/MobileSAM/weights/mobile_sam.pt"
             model_type = cfg.MODEL.SAM.MODEL_TAPE
+            img_resolution  = cfg.MODEL.SAM.IMG_RESOLUTION
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
+            sam = sam_model_registry[model_type](checkpoint=sam_checkpoint, custom_img_size=img_resolution)
             sam.to(device=device)
             sam.eval()
             mask_generator = SamAutomaticMaskGenerator(sam)
             init_kwargs["sam_mask_generator"] = mask_generator
+            init_kwargs["img_resolution"] = img_resolution
+            init_kwargs["sam"] = sam
+            maskCLIP = MaskCLIP(input_resolution=224,  # "ViT-B/16" CLIP.visual
+                                     patch_size=16,
+                                     width=768,
+                                     layers=12,
+                                     heads=12,
+                                     output_dim=512,
+                                     )
+            # CLIP_state_dict = torch.jit.load('/home/wjy/.cache/clip/ViT-B-16.pt', map_location="cpu")
+            # maskCLIP.load_state_dict(CLIP_state_dict.state_dict(), strict=False)
+            init_kwargs["maskCLIP"] = maskCLIP
+
+
             # build a fine tune clip encoder
             init_kwargs[
                 "sam_clip_model_name"] = cfg.MODEL.SAM.CLIP_MODEL_NAME  # 可以不同与 cfg.MODEL.CLIP_ADAPTER.CLIP_MODEL_NAME
@@ -196,12 +227,18 @@ class FreeMix_model(MaskFormer):
         return init_kwargs
 
     def _freeze(self):
+        frozen_exclude  = ["sam"]
         for name, param in self.named_parameters():
             print('\t', name, param.requires_grad)
         print("="*80)
         for name, param in self.named_parameters():
+            if any([exclude in name for exclude in frozen_exclude]):
+                param.requires_grad = False
+            if "myclip_model" in name:
+                param.requires_grad = False
             if param.requires_grad == True:
                 print(name, param.requires_grad)
+        print("=" * 80)
 
     def forward(self, batched_inputs, text_labels=None):
         if self.training:
@@ -255,14 +292,17 @@ class FreeMix_model(MaskFormer):
         images = [x["image"].to(self.device) for x in batched_inputs]
         # clip_images
         clip_images = [(x - self.clip_pixel_mean) / self.clip_pixel_std for x in images]
+        images = [(x - self.pixel_mean) / self.pixel_std for x in images]
+        images = ImageList.from_tensors(images, self.size_divisibility)
+
+        # 更换成IP_CLIP模型（maskCLIP）去一次性推理batch带mask的图片
+        clip_images = ImageList.from_tensors(clip_images, self.size_divisibility)
+        clip_images_480 = F.interpolate(clip_images.tensor, size=(480, 480), mode="bilinear", align_corners=False,)
         # clip_images_480 = torch.vstack(clip_images)
         # clip_images_480 = torch.stack(clip_images, dim=0)
         # clip_images = torch.cat(clip_images, dim = 0).unsqueeze(0)
         # clip_images_480 = F.interpolate(clip_images, size=(480, 480), mode="bilinear", align_corners=False,)
         # clip_images_480 = clip_images_480.reshape(len(batched_inputs), -1, 480, 480)
-
-        images = [(x - self.pixel_mean) / self.pixel_std for x in images]
-        images = ImageList.from_tensors(images, self.size_divisibility)
 
         features = self.backbone(images.tensor)
 
@@ -287,69 +327,70 @@ class FreeMix_model(MaskFormer):
             # ================
             # SAM Branch中间提取的候选mask
             # ================
-            sam_pre_masks = None
-            sam_add_num = 100
-            for b in range(len(batched_inputs)):
-                image_chw = batched_inputs[b]["image"]
-                # image = np.transpose(image_chw.numpy(), (1, 2, 0))
-                image = image_chw.permute(1,2,0).contiguous().cpu().numpy()
-                # img_name = os.path.basename(batched_inputs[b]['file_name'])
-                # cv2.imwrite(os.path.join("/media/data1/wjy/projects/FreeSeg/freeseg_output/test", img_name), image)
-                with torch.no_grad():
-                    sam_masks = self.sam_mask_generator.generate(image)
-                sam_masks = [mask['segmentation'].astype(np.uint8) for mask in sam_masks]
-                sam_masks = np.stack(sam_masks, 0)
-                sam_masks = torch.from_numpy(sam_masks).to(self.device)  # N,512,512
-                # print("(sam_masks.shape[0])", sam_masks.shape[0])
-                # sam_masks = F.interpolate(sam_masks.unsqueeze(0), scale_factor=0.25, mode='nearest').squeeze(0) # N,128,128
-                if sam_masks.shape[0] < sam_add_num:
-                    # append  zero
-                    append_len = sam_add_num - sam_masks.shape[0]
-                    sam_masks_zeros = torch.zeros((append_len, sam_masks.shape[1], sam_masks.shape[2]),
-                                                  device=sam_masks[0].device)
-                    sam_masks = torch.vstack([sam_masks, sam_masks_zeros]).unsqueeze(0)
-                elif sam_masks.shape[0] > sam_add_num:
-                    sam_masks = sam_masks[:sam_add_num, :, :].unsqueeze(0)
-                else:
-                    sam_masks = sam_masks.unsqueeze(0)
-                for i in range(sam_add_num):
-                #     if torch.sum(sam_masks[0][i])== 262144: # 512*512
-                    if torch.sum(sam_masks[0][i]) > 131072: # 大于512*256的分割结果不要，会导致微调clip时提取的image_feature为nan
-                        sam_masks[0][i] = torch.zeros((sam_masks.shape[2], sam_masks.shape[3]),
-                                                  device=sam_masks[0][i].device)
-                if sam_pre_masks is None:
-                    sam_pre_masks = sam_masks
-                else:
-                    sam_pre_masks = torch.cat((sam_masks, sam_pre_masks), dim=0)
+            if self.sam_branch:
+                sam_pre_masks = None
+                sam_add_num = 50 # 增加到100，训练时间增加一倍，内存也会增加
+                # batchify
+                sam_batched_input = [x['image'].cuda() for x in batched_inputs]
+                sam_batched_input = [
+                    {
+                        'image': x,
+                        'point_coords': self.input_point,
+                        'point_labels': self.input_label,
+                        'original_size': x.shape[1:]
+                    } for x in sam_batched_input
+                ]
+                # LBK propagation
+                # with torch.no_grad():
+                refined_masks = self.sam.individual_forward(sam_batched_input, multimask_output=True)
+                for b in range(len(refined_masks)):
+                    sam_masks = refined_masks[b]
+                    # sam_masks = F.interpolate(sam_masks.float().unsqueeze(0), size=(640,640), mode='nearest').squeeze(0) # N,128,128
+                    if sam_masks.shape[0] < sam_add_num:
+                        # append  zero
+                        append_len = sam_add_num - sam_masks.shape[0]
+                        sam_masks_zeros = torch.zeros((append_len, sam_masks.shape[1], sam_masks.shape[2]),
+                                                      device=self.device)
+                        sam_masks = torch.vstack([sam_masks, sam_masks_zeros]).unsqueeze(0)
+                    elif sam_masks.shape[0] > sam_add_num:
+                        sam_masks = sam_masks[:sam_add_num, :, :].unsqueeze(0)
+                    else:
+                        sam_masks = sam_masks.unsqueeze(0)
+                    for i in range(sam_add_num):
+                        #     if torch.sum(sam_masks[0][i])== 262144: # 512*512
+                        if torch.sum(sam_masks[0][i]) > 131072:  # 大于512*256的分割结果不要，会导致微调clip时提取的image_feature为nan
+                            sam_masks[0][i] = torch.zeros((sam_masks.shape[2], sam_masks.shape[3]),
+                                                          device=self.device)
+                    if sam_pre_masks is None:
+                        sam_pre_masks = sam_masks
+                    else:
+                        sam_pre_masks = torch.cat((sam_masks, sam_pre_masks), dim=0)
 
-            # print("sam_pre_masks.shape", sam_pre_masks.shape)  # torch.Size([bs, 100, 128, 128])
 
-            image_feature_list = []
-            for bs in range(sam_pre_masks.shape[0]):
-                # print("sam_pre_masks[]",str(bs), torch.sum(sam_pre_masks[bs]))
-                # print("np.unique(sam_pre_masks)", torch.unique(sam_pre_masks))
-                image_feature = self.myclip_model(clip_images[bs].unsqueeze(0), sam_pre_masks[bs])
-                image_feature_list.append(image_feature)
-            image_features = torch.stack(image_feature_list, dim=0)
-            # image_features = self.myclip_model(clip_images_480, sam_pre_masks)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            # sam_pre_masks30 = sam_pre_masks[3][0]
-            # print("sam_pre_masks[3][0]", sam_pre_masks[3][0], torch.sum(sam_pre_masks[3][0]))
-            # print("image_features[3]", image_features[3])
-            if torch.isnan(image_features).any():
-                print("stop")
+                # 原来的CLIP的vit模型，一张图像一张图像的去推理
+                # image_feature_list = []
+                # for bs in range(sam_pre_masks.shape[0]):
+                #     image_feature = self.clip_adapter.clip_model.visual(clip_images[bs].unsqueeze(0), sam_pre_masks[bs].float())
+                #     image_feature_list.append(image_feature)
+                # image_features = torch.stack(image_feature_list, dim=0)
+                # image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
-            clip_cls = self.clip_adapter.get_sim_logits(text_features, image_features)
-            # print("clip_cls[3]", clip_cls.shape, clip_cls[3])
-            sam_pre_masks = F.interpolate(sam_pre_masks, scale_factor=0.25,
-                                          mode='nearest')  # 4,100,512,512 => 4,100,128,128
-            # print("np.unique(sam_pre_masks)", np.unique(sam_pre_masks))
+
+                # 更换成IP_CLIP模型（maskCLIP）去一次性推理batch带mask的图片
+                image_features = self.maskCLIP(clip_images_480, sam_pre_masks)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+
+                clip_cls = self.clip_adapter.get_sim_logits(text_features, image_features)
+                # sam_pre_masks = F.interpolate(sam_pre_masks.float(), scale_factor=0.25,
+                #                               mode='nearest')  # 4,100,512,512 => 4,100,128,128
+                sam_pre_masks = F.interpolate(sam_pre_masks.float(), size=(128,128),
+                                              mode='nearest')  # 4,100,128,128
 
             outputs, fused_text_features = self.sem_seg_head(features, text_features)  # text_features没有变化
             outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
                 text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
             )  # outputs["pred_logits"]作为图像特征, 输出后得到预测类别
-            # print("outputs[pred_logits]", outputs["pred_logits"].shape, outputs["pred_logits"])
 
             # add sam branch result
             outputs["pred_logits"] = torch.cat((outputs["pred_logits"], clip_cls), dim=1)
@@ -373,13 +414,43 @@ class FreeMix_model(MaskFormer):
 
             # print(len(outputs["pred_masks"]), len(targets))
             losses = self.criterion(outputs, targets)
-
             for k in list(losses.keys()):
                 if k in self.criterion.weight_dict:
                     losses[k] *= self.criterion.weight_dict[k]
-                else:
-                    # remove this loss if not specified in `weight_dict`
-                    losses.pop(k)
+
+            # mask aware loss
+            mask_results = outputs["pred_masks"]
+            gt_instances = [x["sem_instances"].to(self.device) for x in batched_inputs]
+            targets = self.prepare_targets(gt_instances, images)
+
+            clip_cls = outputs["pred_logits"]
+            logits_per_image = F.softmax(clip_cls[..., :-1], dim=-1)  # 16*100*156
+
+            logits_per_instance = []  # bn * 100
+            labels_per_instance = []  # bn * h*w
+            masks_per_instance = []  # bn * 100 * h*w
+            assert len(targets) > 0, len(targets)
+            for b in range(len(targets)):
+                maski = mask_results[b].unsqueeze(0)
+                for i in range(targets[b]['masks'].shape[0]):
+                    logiti = logits_per_image[b, :, targets[b]['labels'][i]].unsqueeze(0)
+                    labeli = targets[b]['masks'][i].unsqueeze(0)
+                    logits_per_instance.append(logiti)
+                    labels_per_instance.append(labeli)
+                    masks_per_instance.append(maski)
+
+            if len(labels_per_instance) != 0:
+                masks_per_instance = torch.cat(masks_per_instance, dim=0)
+                labels_per_instance = torch.cat(labels_per_instance, dim=0)
+                logits_per_instance = torch.cat(logits_per_instance, dim=0)
+
+                ious = self.get_iou(masks_per_instance, labels_per_instance).detach()  # bs*100
+                ious = self.mynorm(ious)
+                ma_loss = self.ma_loss(logits_per_instance, ious)
+
+                losses['ma_loss'] = ma_loss*10
+            else:
+                losses['ma_loss'] = torch.tensor([0], device=self.device)
 
             return losses
         else:
@@ -397,60 +468,71 @@ class FreeMix_model(MaskFormer):
             # ================
             # SAM Branch中间提取的候选mask
             # ================
-            sam_pre_masks = None
-            sam_add_num = 100
-            for b in range(len(batched_inputs)):
-                image_chw = batched_inputs[b]["image"]
-                # image = image_chw.transpose(0,2).transpose(1,2).cpu().numpy()
-                image = image_chw.permute(1,2,0).contiguous().cpu().numpy()
-                # image = np.transpose(image_chw.numpy(), (1, 2, 0))
-                with torch.no_grad():
-                    sam_masks = self.sam_mask_generator.generate(image)
-                sam_masks = [mask['segmentation'].astype(np.uint8) for mask in sam_masks]
-                sam_masks = np.stack(sam_masks, 0)
-                sam_masks = torch.from_numpy(sam_masks).to(self.device)  # N,512,512
-                # print("(sam_masks.shape[0])", sam_masks.shape[0])
-                # sam_masks = F.interpolate(sam_masks.unsqueeze(0), scale_factor=0.25, mode='nearest').squeeze(0) # N,128,128
-                if sam_masks.shape[0] < sam_add_num:
-                    # append  zero
-                    append_len = sam_add_num - sam_masks.shape[0]
-                    sam_masks_zeros = torch.zeros((append_len, sam_masks.shape[1], sam_masks.shape[2]),
-                                                  device=sam_masks[0].device)
-                    sam_masks = torch.vstack([sam_masks, sam_masks_zeros]).unsqueeze(0)
-                elif sam_masks.shape[0] > sam_add_num:
-                    sam_masks = sam_masks[:sam_add_num, :, :].unsqueeze(0)
-                else:
-                    sam_masks = sam_masks.unsqueeze(0)
-                for i in range(sam_add_num):
-                #     if torch.sum(sam_masks[0][i])== 262144: # 512*512
-                    if torch.sum(sam_masks[0][i]) > 131072: # 大于512*256的分割结果不要，会导致微调clip时提取的image_feature为nan
-                        sam_masks[0][i] = torch.zeros((sam_masks.shape[2], sam_masks.shape[3]),
-                                                  device=sam_masks[0][i].device)
-                if sam_pre_masks is None:
-                    sam_pre_masks = sam_masks
-                else:
-                    sam_pre_masks = torch.cat((sam_masks, sam_pre_masks), dim=0)
+            if self.sam_branch:
+                sam_pre_masks = None
+                sam_add_num = 50
+                sam_batched_input = [x['image'].cuda() for x in batched_inputs]
+                sam_batched_input = [
+                    {
+                        'image': x,
+                        'point_coords': self.input_point,
+                        'point_labels': self.input_label,
+                        'original_size': x.shape[1:]
+                    } for x in sam_batched_input
+                ]
+                # LBK propagation
+                refined_masks = self.sam.individual_forward(sam_batched_input, multimask_output=True)
+                for b in range(len(refined_masks)):
+                    sam_masks = refined_masks[b]
+                    # sam_masks = F.interpolate(sam_masks.unsqueeze(0), scale_factor=0.25, mode='nearest').squeeze(0) # N,128,128
+                    if sam_masks.shape[0] < sam_add_num:
+                        # append  zero
+                        append_len = sam_add_num - sam_masks.shape[0]
+                        sam_masks_zeros = torch.zeros((append_len, sam_masks.shape[1], sam_masks.shape[2]),
+                                                      device=self.device)
+                        sam_masks = torch.vstack([sam_masks, sam_masks_zeros]).unsqueeze(0)
+                    elif sam_masks.shape[0] > sam_add_num:
+                        sam_masks = sam_masks[:sam_add_num, :, :].unsqueeze(0)
+                    else:
+                        sam_masks = sam_masks.unsqueeze(0)
+                    for i in range(sam_add_num):
+                        #     if torch.sum(sam_masks[0][i])== 262144: # 512*512
+                        if torch.sum(sam_masks[0][i]) > 131072:  # 大于512*256的分割结果不要，会导致微调clip时提取的image_feature为nan
+                            sam_masks[0][i] = torch.zeros((sam_masks.shape[2], sam_masks.shape[3]),
+                                                          device=self.device)
+                    if sam_pre_masks is None:
+                        sam_pre_masks = sam_masks
+                    else:
+                        sam_pre_masks = torch.cat((sam_masks, sam_pre_masks), dim=0)
 
-            image_feature_list = []
-            for bs in range(sam_pre_masks.shape[0]):
-                image_feature = self.myclip_model(clip_images[bs].unsqueeze(0), sam_pre_masks[bs])
-                image_feature_list.append(image_feature)
-            image_features = torch.stack(image_feature_list, dim=0)
-            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-            clip_cls = self.clip_adapter.get_sim_logits(text_features, image_features)
-            sam_pre_masks = F.interpolate(sam_pre_masks, scale_factor=0.25,
-                                          mode='nearest')  # 4,100,512,512 => 4,100,128,128
+                # 原来的CLIP的vit模型，一张图像一张图像的去推理
+                # image_feature_list = []
+                # for bs in range(sam_pre_masks.shape[0]):
+                #     image_feature = self.clip_adapter.clip_model.visual(clip_images[bs].unsqueeze(0), sam_pre_masks[bs].float())
+                #     image_feature_list.append(image_feature)
+                # image_features = torch.stack(image_feature_list, dim=0)
+                # image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+
+                # 更换成IP_CLIP模型（maskCLIP）去一次性推理batch带mask的图片
+                image_features = self.maskCLIP(clip_images_480, sam_pre_masks)
+                image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+                clip_cls = self.clip_adapter.get_sim_logits(text_features, image_features)
+                sam_pre_masks = F.interpolate(sam_pre_masks.float(), size=(128,128),
+                                              mode='nearest')  # 4,100,512,512 => 4,100,128,128
 
             outputs, fused_text_features = self.sem_seg_head(features, text_features)
             outputs["pred_logits"] = self.clip_adapter.get_sim_logits(
                 text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
             )
-            # add sam branch result
-            mask_cls_results = torch.cat((outputs["pred_logits"], clip_cls), dim=1)
-            mask_pred_results = torch.cat((outputs["pred_masks"], sam_pre_masks), dim=1)
-
-            # mask_cls_results = outputs["pred_logits"]
-            # mask_pred_results = outputs["pred_masks"]
+            if self.sam_branch:
+                # add sam branch result
+                mask_cls_results = torch.cat((outputs["pred_logits"], clip_cls), dim=1)
+                mask_pred_results = torch.cat((outputs["pred_masks"], sam_pre_masks), dim=1)
+            else:
+                mask_cls_results = outputs["pred_logits"]
+                mask_pred_results = outputs["pred_masks"]
 
             mask_pred_results = F.interpolate(
                 mask_pred_results,
@@ -470,40 +552,6 @@ class FreeMix_model(MaskFormer):
                 )
                 image = input_per_image["image"].to(self.device)
 
-                ## 保存可视化
-                # img_name = os.path.basename(input_per_image['file_name'])
-                # # save_root = "/media/data1/wjy/projects/FreeSeg/output/Camvid_mixtrain_classignore_mask_results/" + img_name[:-4]
-                # # save_root = "/media/data1/wjy/projects/FreeSeg/output/Camvid_classignore_mask_results/" + img_name[:-4]
-                # # save_root = "/media/data1/wjy/projects/FreeSeg/output/Baseline_Camvid-base_mask2former_R50_bs16_20k/inference/"
-                # # save_root = "/media/data1/wjy/projects/FreeSeg/output/Baseline_CamPot-base_mask2former_R50_bs16_20k/inference_clip/"
-                # save_root = self.outdir  + "inference/"
-                # os.makedirs(save_root, exist_ok=True)
-                # save_img_path = os.path.join(save_root, img_name)
-                # print(save_img_path, image.size())
-                # # cv2.imencode('.png', image.cpu().numpy())[1].tofile(save_img_path)
-                #
-                # visual_mask_pre = mask_pred_result.sigmoid()
-                # mask_save = image.cpu().numpy().copy()
-                # mask_save = np.transpose(mask_save, (1, 2, 0))
-                # cv2.imwrite(save_img_path, mask_save)
-                # mask_save = np.zeros_like(mask_save)
-                # # print(mask_save.shape)
-                # for c in range(visual_mask_pre.size(0)):
-                #     color = list(np.random.choice(range(256), size=3))
-                #     pre_map = visual_mask_pre[c].cpu().numpy() * 255
-                #     color_map = np.ones([height, width, 3]) * color
-                #     # print(pre_map.shape)
-                #     # print(color_map.shape)
-                #     # mask_save[pre_map != 0] = mask_save[pre_map != 0] * 0.5 + color_map[pre_map != 0] * 0.5
-                #     mask_save[pre_map > 128] = color_map[pre_map > 128]
-                #     # save_path = save_root + "/"+str(c)+'.png'
-                #     # cv2.imencode('.png', pre_map)[1].tofile(save_path)
-                #     # cv2.imwrite(save_path, pre_map)
-                # save_path = save_root + "/"+img_name[:-4]+"_pred-masks.png"
-                # cv2.imwrite(save_path, mask_save)
-                # # cv2.imencode('.png', mask_save)[1].tofile(save_path)
-
-                # semantic segmentation inference
                 r = self.semantic_inference(
                     mask_cls_result, mask_pred_result, image, class_names, task_name, dataset_name
                 )
@@ -897,6 +945,37 @@ class FreeMix_model(MaskFormer):
                 }
             )
         return new_targets
+
+    def get_iou(self, pred, target):
+        # pred = pred.sigmoid()
+        b, c, h, w = pred.shape
+        if len(target.shape) != len(pred.shape):
+            target = target.unsqueeze(1)
+        # assert pred.shape == target.shape
+        if pred.shape[-2:] != target.shape[-2:]:
+            pred = F.interpolate(
+                pred,
+                size=(target.shape[-2], target.shape[-1]),
+                mode="bilinear",
+                align_corners=False,
+            )
+
+        pred = pred.reshape(b, c, -1)
+        target = target.reshape(b, 1, -1)
+
+        # compute the IoU of the foreground
+        Iand1 = torch.sum(target * pred, dim=-1)
+        Ior1 = torch.sum(target, dim=-1) + torch.sum(pred, dim=-1) - Iand1 + 0.0000001
+        IoU1 = Iand1 / Ior1
+
+        return IoU1
+
+    def mynorm(self, embeding):
+        assert len(embeding.shape) == 2, embeding.shape
+        min_em, _ = torch.min(embeding, dim=-1)
+        max_em, _ = torch.max(embeding, dim=-1)
+        embeding = (embeding - min_em.unsqueeze(-1)) / ((max_em - min_em + 0.00000001).unsqueeze(-1))
+        return embeding
 
     @property
     def region_clip_adapter(self):

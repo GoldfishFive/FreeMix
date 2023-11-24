@@ -7,4 +7,5 @@ from .mask_former_model import MaskFormer
 from .open_vocabulary_model import OpenVocabulary
 from .proposal_classification import ProposalClipClassifier
 from .freemix_model import FreeMix_model
+from .freemix_batchSAM import FreeMix_BatchSAM
 

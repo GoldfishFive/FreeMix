@@ -452,7 +452,6 @@ def add_freemix_config(cfg):
     cfg.MODEL.CLIP_ADAPTER.REGION_CLIP_ADAPTER.PROMPT_SHAPE = (16, 0)
     cfg.MODEL.CLIP_ADAPTER.REGION_CLIP_ADAPTER.PROMPT_CHECKPOINT = ""
 
-
     cfg.MODEL.SEM_SEG_HEAD.EMB_SIZE = 256
     cfg.MODEL.SEM_SEG_HEAD.EMBED_DIM = 2048
     cfg.MODEL.SEM_SEG_HEAD.NUM_HEADS = 8
@@ -460,6 +459,7 @@ def add_freemix_config(cfg):
 
     cfg.MODEL.SAM = CN()
     cfg.MODEL.SAM.MODEL_TAPE = "vit_t"
+    cfg.MODEL.SAM.IMG_RESOLUTION = 512 # same with crop size
     cfg.MODEL.SAM.CLIP_MODEL_NAME =  "ViT-B/16"
     cfg.MODEL.SAM.CLIP_PIXEL_MEAN =  [ 123.675, 116.280, 103.530 ]
     cfg.MODEL.SAM.CLIP_PIXEL_STD =  [ 58.395, 57.120, 57.375 ]

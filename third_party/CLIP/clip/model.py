@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-
+import math
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -232,7 +232,7 @@ class QuickGELU(nn.Module):
 
 
 class ResidualAttentionBlock(nn.Module):
-    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None):
+    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None, bias_scaling = False):
         super().__init__()
 
         self.attn = nn.MultiheadAttention(d_model, n_head)
@@ -249,6 +249,16 @@ class ResidualAttentionBlock(nn.Module):
         self.ln_2 = LayerNorm(d_model)
         self.attn_mask = attn_mask
 
+        # added by wjy
+        self.num_heads = n_head
+        self.mask_pool = None  # bH*1*1 (H: num_head)
+        self.mask_poolhw = None
+
+        if bias_scaling:
+            self.bias_scaling = nn.Embedding(1, 12)
+            self.bias_scaling.weight = nn.Parameter(torch.ones(12) * 100)
+        # added over
+
     def attention(self, x: torch.Tensor, **kwargs):
         self.attn_mask = (
             self.attn_mask.to(dtype=x.dtype, device=x.device)
@@ -259,8 +269,46 @@ class ResidualAttentionBlock(nn.Module):
             x, x, x, need_weights=False, attn_mask=self.attn_mask, **kwargs
         )[0]
 
-    def forward(self, x: torch.Tensor, **kwargs):
-        x = x + self.attention(self.ln_1(x), **kwargs)
+    # def forward(self, x: torch.Tensor, **kwargs):
+    #     x = x + self.attention(self.ln_1(x), **kwargs)
+    #     x = x + self.mlp(self.ln_2(x))
+    #     return x
+    def forward(self, x: torch.Tensor, mask: torch.Tensor, newhw: torch.Tensor = None):
+        if self.attn_mask is not None:
+            x = x + self.attention(self.ln_1(x))
+        else:
+            xatten = self.ln_1(x)
+            if mask is not None:
+                if len(mask.shape) == 3:
+                    mask = mask.unsqueeze(1)
+                mask = F.interpolate(mask.float(), size=(newhw, newhw), mode='bilinear', align_corners=False)  # b*1*h*w
+
+                # generate attention bias, self.mask_pool: cls bias; self.mask_poolhw: feat bias
+                attn_mask = (mask.flatten(2).unsqueeze(1).repeat(1, self.num_heads, 1, 1).flatten(0,
+                                                                                                  1))  # bH*100*hw (H: num_head)
+                if self.mask_pool is None or (self.mask_pool.shape[0] != attn_mask.shape[0]):
+                    self.mask_pool = torch.eye(attn_mask.shape[1]).unsqueeze(0).repeat(attn_mask.shape[0], 1, 1).to(
+                        attn_mask.device)  # maskpool: bH*100*100
+                attn_mask = torch.cat([self.mask_pool, attn_mask], dim=-1)
+                if self.mask_poolhw is None or (self.mask_poolhw.shape[0] != attn_mask.shape[0]):
+                    self.mask_poolhw = torch.ones(attn_mask.shape[0], attn_mask.shape[2] - attn_mask.shape[1],
+                                                  attn_mask.shape[2]).to(attn_mask.device)  # mask_poolhw: bH*hw*100+hw
+                    self.mask_poolhw[:, :, :mask.shape[1]] = 0.0
+                attn_mask = (torch.cat([attn_mask, self.mask_poolhw], dim=1) < 0.5).bool()
+                attn_mask = attn_mask.detach()
+                mask = attn_mask
+
+                # if current transformer layer == start mask attention layer: repeat F_cls N times
+                if xatten.shape[0] != mask.shape[-1]:
+                    xattenmean = xatten[0].unsqueeze(0).repeat(mask.shape[-1] - xatten.shape[0], 1, 1)
+                    xmean = x[0].unsqueeze(0).repeat(mask.shape[-1] - xatten.shape[0], 1, 1)
+                    assert mask.shape[-1] - xatten.shape[0] == 49, (mask.shape[-1], xatten.shape[0])
+                    xatten = torch.cat([xattenmean, xatten], dim=0)
+                    x = torch.cat([xmean, x], dim=0)
+
+            xatten = self.attn(xatten, xatten, xatten, need_weights=False, attn_mask=mask)[0]
+            x = x + xatten
+
         x = x + self.mlp(self.ln_2(x))
         return x
 
@@ -276,11 +324,23 @@ class Transformer(nn.Module):
             *[ResidualAttentionBlock(width, heads, attn_mask) for _ in range(layers)]
         )
 
-    def forward(self, x: torch.Tensor, **kwargs):
-        for block in self.resblocks:
-            x = block(x, **kwargs)
-        return x
+    # def forward(self, x: torch.Tensor, **kwargs):
+    #     for block in self.resblocks:
+    #         x = block(x, **kwargs)
+    #     return x
+    def forward(self, x: torch.Tensor, mask: torch.Tensor = None):
+        newhw = int(math.sqrt(x.shape[0]-1))
+        if mask is None:
+            for i in range(len(self.resblocks)):
+                x = self.resblocks[i](x, mask, newhw)
+            return x
 
+        for i in range(len(self.resblocks)):
+            # if i < self.start_layers:
+            #     x = self.resblocks[i](x, None, newhw)
+            # else:
+            x = self.resblocks[i](x, mask, newhw)
+        return x
 
 class VisionTransformer(nn.Module):
     def __init__(
@@ -479,7 +539,8 @@ class CLIP(nn.Module):
             )
         else:
             vision_heads = vision_width // 64
-            self.visual = VisionTransformer(
+            # self.visual = VisionTransformer(
+            self.visual = MaskCLIP(
                 input_resolution=image_resolution,
                 patch_size=vision_patch_size,
                 width=vision_width,
@@ -589,6 +650,109 @@ class CLIP(nn.Module):
         # shape = [global_batch_size, global_batch_size]
         return logits_per_image, logits_per_text
 
+
+class MaskCLIP(nn.Module):
+    def __init__(
+            self,
+            input_resolution: int,
+            patch_size: int,
+            width: int,
+            layers: int,
+            heads: int,
+            output_dim: int,
+    ):
+        super().__init__()
+        self.input_resolution = input_resolution
+        self.output_dim = output_dim
+        self.conv1 = nn.Conv2d(
+            in_channels=3,
+            out_channels=width,
+            kernel_size=patch_size,
+            stride=patch_size,
+            bias=False,
+        )
+
+        scale = width ** -0.5
+        self.class_embedding = nn.Parameter(scale * torch.randn(width))
+        self.positional_embedding = nn.Parameter(
+            scale * torch.randn((input_resolution // patch_size) ** 2 + 1, width)
+        )
+        self.grid_size = input_resolution // patch_size
+        self.ln_pre = LayerNorm(width)
+
+        self.transformer = Transformer(width, layers, heads)
+
+        self.ln_post = LayerNorm(width)
+        self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            mask: torch.Tensor = None,
+            inter_method="bicubic",
+            return_cls=True,
+    ):
+
+        x = self.conv1(x)  # shape = [*, width, grid, grid]
+        b, _, gh, gw = x.size()
+
+        x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+        x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
+        x = torch.cat(
+            [
+                self.class_embedding.to(x.dtype)
+                + torch.zeros(
+                    x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device
+                ),
+                x,
+            ],
+            dim=1,
+        )  # shape = [*, grid ** 2 + 1, width]
+
+        positional_embedding = self.positional_embedding
+        if not (self.positional_embedding.shape[0] == x.shape[0]):
+            cls_pos = positional_embedding[0:1, :]
+            assert inter_method in ["bicubic", "bilinear"], inter_method
+            if inter_method in ["bicubic", "bilinear"]:
+                per_pos_embedding = (
+                    F.interpolate(
+                        positional_embedding[1:, :]
+                        .permute(1, 0)
+                        .view(1, -1, self.grid_size, self.grid_size),
+                        size=(gh, gw),
+                        mode="bicubic",
+                        align_corners=True
+                    )
+                    .reshape(-1, gh * gw)
+                    .permute(1, 0)
+                )
+            positional_embedding = torch.cat([cls_pos, per_pos_embedding])
+
+        x = x + positional_embedding.to(x.dtype)
+        x = self.ln_pre(x)
+
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.transformer(x, mask)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+
+        if mask is None:
+            if return_cls:
+                x = self.ln_post(x[:, 0, :])
+            else:
+                x = self.ln_post(x[:, 1:, :])
+        else:
+            if len(mask.shape) == 3:
+                mask = mask.unsqueeze(1)
+            if return_cls:
+                x = self.ln_post(x[:, :mask.shape[1], :]).squeeze(1)
+            else:
+                x = self.ln_post(x[:, mask.shape[1]:, :])
+
+        if self.proj is not None:
+            x = x @ self.proj
+        if not return_cls:
+            x = x.reshape(b, gh, gw, -1)
+        return x
 
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""

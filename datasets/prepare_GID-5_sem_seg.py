@@ -57,7 +57,6 @@ def parse_args():
                         # default="/media/data2/wjy/datasets/GID_15_fmt_VOC/")
                         default="/media/data2/wjy/datasets/GID_5_fmt_VOC/")
     parser.add_argument("-o", "--out_dir", help="output path",
-                        # default="/media/data2/wjy/datasets/Potsdam_fmt-VOC/")
                         default="/media/data2/wjy/datasets/GID_5_fmt_VOC/")
     parser.add_argument("--nproc", default=16, type=int, help="number of process")
     args = parser.parse_args()

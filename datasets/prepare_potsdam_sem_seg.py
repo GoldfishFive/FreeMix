@@ -21,21 +21,41 @@ from PIL import Image
 #     6: 5,
 #     255: 255
 # }
+# full_clsID_to_trID = {
+#     0:255,
+#     1: 31,
+#     2: 4,
+#     3: 32,
+#     4: 26,
+#     5: 5,
+#     6: 33,
+#     255: 255
+# } # mix with camvid
 full_clsID_to_trID = {
-    0:255,
-    1: 31,
-    2: 4,
-    3: 32,
-    4: 26,
-    5: 5,
-    6: 33,
+    0: 255,
+    1: 5,
+    2: 6,
+    3: 7,
+    4: 8,
+    5: 9,
+    6: 10,
     255: 255
-} # mix with camvid
-
+} # mix with GID5
+base_clsID_to_trID = {
+    1: 3,
+    2: 4,
+    5: 5
+}# mix with GID5
+novel_clsID_to_trID = {
+    3: 2,
+    4: 3,
+    6: 4
+}# mix with GID5
 novel_clsID = [3,4,6]
 base_clsID = [k for k in full_clsID_to_trID.keys() if k not in novel_clsID + [0, 255]]
-novel_clsID_to_trID = {k: i for i, k in enumerate(novel_clsID)}
-base_clsID_to_trID = {k: i for i, k in enumerate(base_clsID)}
+# novel_clsID_to_trID = {k: i for i, k in enumerate(novel_clsID)}
+# base_clsID_to_trID = {k: i for i, k in enumerate(base_clsID)}
+
 print(full_clsID_to_trID)
 print(base_clsID_to_trID)
 print(novel_clsID_to_trID)
@@ -70,7 +90,7 @@ def parse_args():
                         default="/media/data2/wjy/datasets/Potsdam_fmt-VOC/")
     parser.add_argument("-o", "--out_dir", help="output path",
                         # default="/media/data2/wjy/datasets/Potsdam_fmt-VOC/")
-                        default="/media/data2/wjy/datasets/Potsdam_fmt-VOC/annotations_map2Camvid/")
+                        default="/media/data2/wjy/datasets/Potsdam_fmt-VOC/annotations_map2GID5/")
     parser.add_argument("--nproc", default=16, type=int, help="number of process")
     args = parser.parse_args()
     return args
