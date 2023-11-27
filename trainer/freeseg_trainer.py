@@ -524,10 +524,6 @@ class FreeMix_Trainer(FreeSeg_Trainer):
         loaders = {}
         for dataset_name in dataset_names:
             cfg = cls.update_dataset_config(cfg, dataset_name)
-            # if 'camvid' in dataset_name:
-            #     cfg.update(cfg.Camvid)
-            # if 'potsdam' in dataset_name:
-            #     cfg.update(cfg.Potsdam)
             mapper_name = cfg.INPUT.DATASET_MAPPER_NAME
             # Semantic segmentation dataset mapper
             if mapper_name == "camvid_mask_former_semantic":
@@ -543,10 +539,22 @@ class FreeMix_Trainer(FreeSeg_Trainer):
                 mapper = MaskFormerSemanticDatasetMapper(cfg, True)
                 loaders[dataset_name] = build_freemix_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
 
+            # Panoptic segmentation dataset mapper
+            elif cfg.INPUT.DATASET_MAPPER_NAME == "mask_former_panoptic":
+                mapper = MaskFormerPanopticDatasetMapper(cfg, True)
+                loaders[dataset_name] = build_freemix_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+            # Instance segmentation dataset mapper
+            elif cfg.INPUT.DATASET_MAPPER_NAME == "mask_former_instance":
+                mapper = MaskFormerInstanceDatasetMapper(cfg, True)
+                loaders[dataset_name] = build_freemix_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+            elif cfg.INPUT.DATASET_MAPPER_NAME == "coco_full_lsj":
+                mapper = COCOFullTaskNewBaselineDatasetMapper(cfg, True)
+                loaders[dataset_name] = build_freemix_detection_train_loader(cfg, dataset_name=dataset_name, mapper=mapper)
+
         if len(loaders) == 1 and not cfg.LOADER.get('JOINT', False):
             return list(loaders.values())[0]
         else:
-            return JointLoader(loaders, key_dataset=cfg.LOADER.get('KEY_DATASET', 'potsdam'))
+            return JointLoader(loaders, key_dataset=cfg.LOADER.get('KEY_DATASET', 'COCO'))
 
     @classmethod
     def update_dataset_config(cls, cfg, dataset_name):
@@ -558,6 +566,8 @@ class FreeMix_Trainer(FreeSeg_Trainer):
             cfg.update(cfg.GID_15)
         if 'GID_5' in dataset_name:
             cfg.update(cfg.GID_5)
+        if 'coco' in dataset_name:
+            cfg.update(cfg.COCO)
         return cfg
 
     @classmethod

@@ -1,0 +1,11 @@
+{
+"name": "FreeMix_BatchSAM_maskCLIP_cocostuff156_mean_selfsup_bs2_60k.json",
+"cwd": "/media/sda/wjy/projects/FreeMix",
+"script": "/media/sda/wjy/projects/FreeMix/train_freemix.py",
+"args": "--config-file configs/coco-stuff-164k-156/FreeMix_BatchSAM_maskCLIP_cocostuff156_mean_selfsup_bs2_60k.yaml --num-gpus 2 --resume",
+"interpreter": "/media/sda/wjy/miniconda3/envs/freemix/bin/python",
+"merge_logs": true,
+"out_file": "/media/sda/wjy/projects/FreeSeg/output/GID5Pot/FreeMix_BatchSAM_maskCLIP_cocostuff156_mean_selfsup_bs2_60k/2GPU_info.log",
+"env": {"CUDA_VISIBLE_DEVICES":"0,1", "DETECTRON2_DATASETS":"/media/sda/wjy/datasets/"},
+"autorestart" :false
+}

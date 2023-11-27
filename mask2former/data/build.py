@@ -273,6 +273,8 @@ def _freemix_train_loader_from_config(cfg, dataset_name, mapper, *, dataset=None
         scene_name = cfg.GID_15.Scene_name
     elif "GID_5" in dataset_name:
         scene_name = cfg.GID_5.Scene_name
+    elif "coco" in dataset_name:
+        scene_name = cfg.COCO.Scene_name
 
     if dataset is None:
         dataset = get_freemix_segmant_dataset_dicts(
@@ -469,6 +471,8 @@ def _freemix_test_loader_from_config(cfg, dataset_name, mapper=None):
         scene_name = cfg.GID_15.Scene_name
     elif "GID_5" in dataset_name:
         scene_name = cfg.GID_5.Scene_name
+    elif "coco" in dataset_name:
+        scene_name = cfg.COCO.Scene_name
 
     dataset = get_freemix_segmant_dataset_dicts(
         dataset_name,

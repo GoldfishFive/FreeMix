@@ -405,6 +405,54 @@ def add_freemix_config(cfg):
     cfg.GID_5.DATALOADER.REPEAT_THRESHOLD = 0.0
     cfg.GID_5.DATALOADER.SAMPLER_TRAIN = "TrainingSampler"
 
+    cfg.COCO = CN()
+    cfg.COCO.Scene_name = "remote sensing"
+    cfg.COCO.INPUT = CN()
+    cfg.COCO.INPUT.DATASET_MAPPER_NAME = "GID_5_mask_former_semantic"
+    cfg.COCO.INPUT.COLOR_AUG_SSD = True
+    cfg.COCO.INPUT.CROP = CN({"ENABLED": True})
+    cfg.COCO.INPUT.CROP.TYPE = "absolute"
+    cfg.COCO.INPUT.CROP.SIZE = [512, 512]
+    cfg.COCO.INPUT.CROP.SINGLE_CATEGORY_MAX_AREA = 1.0
+    cfg.COCO.INPUT.FORMAT = "BGR"
+    cfg.COCO.INPUT.IMAGE_SIZE = 1024
+    cfg.COCO.INPUT.MASK_FORMAT = "polygon"  # alternative: "bitmask"
+
+    cfg.COCO.INPUT.MAX_SCALE = 2.0
+    cfg.COCO.INPUT.MAX_SIZE_TRAIN = 2048
+    cfg.COCO.INPUT.MAX_SIZE_TEST = 2048
+    cfg.COCO.INPUT.MIN_SCALE = 0.1
+    cfg.COCO.INPUT.MIN_SIZE_TEST = 512
+    cfg.COCO.INPUT.MIN_SIZE_TRAIN = (320, 384, 448, 512, 576, 640, 704, 768, 832, 896, 960)
+    cfg.COCO.INPUT.MIN_SIZE_TRAIN_SAMPLING = "choice"
+    cfg.COCO.INPUT.RANDOM_FLIP = "horizontal"
+    cfg.COCO.INPUT.SIZE_DIVISIBILITY = 512
+
+    cfg.COCO.TEST = CN()
+    cfg.COCO.TEST.AUG = CN({"ENABLED": False})
+    cfg.COCO.TEST.AUG.FLIP = True
+    cfg.COCO.TEST.AUG.MIN_SIZES = (256, 384, 512, 640, 768, 896)
+    cfg.COCO.TEST.AUG.MAX_SIZE = 3584
+    cfg.COCO.TEST.DENSE_CRF = False
+    cfg.COCO.TEST.EVAL_PERIOD = 5000
+    cfg.COCO.TEST.EXPECTED_RESULTS = []
+    cfg.COCO.TEST.KEYPOINT_OKS_SIGMAS = []
+    cfg.COCO.TEST.OPTIM = CN()
+    cfg.COCO.TEST.OPTIM.LR = 0.001
+    cfg.COCO.TEST.PRECISE_BN = CN({"ENABLED": False})
+    cfg.COCO.TEST.PRECISE_BN.NUM_ITER = 200
+    cfg.COCO.TEST.SLIDING_WINDOW = False
+    cfg.COCO.TEST.SLIDING_TILE_SIZE = 224
+    cfg.COCO.TEST.SLIDING_OVERLAP = 2 / 3.0
+
+    cfg.COCO.DATALOADER = CN()
+    cfg.COCO.DATALOADER.ASPECT_RATIO_GROUPING = True
+    cfg.COCO.DATALOADER.FILTER_EMPTY_ANNOTATIONS = True
+    cfg.COCO.DATALOADER.NUM_WORKERS = 4
+    cfg.COCO.DATALOADER.REPEAT_THRESHOLD = 0.0
+    cfg.COCO.DATALOADER.SAMPLER_TRAIN = "TrainingSampler"
+
+
     cfg.ORACLE = False
     cfg.PSEUDO = False
     cfg.PSEUDO_FLAG_NAME = "trainable_flag"
