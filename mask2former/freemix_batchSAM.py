@@ -316,16 +316,15 @@ class FreeMix_BatchSAM(MaskFormer):
         # ================
         if self.sam_branch:
             sam_pre_masks = None
-            sam_add_num = 50  # 增加到100，训练时间增加一倍，内存也会增加
+            sam_add_num = 100 # 增加到100，训练时间增加一倍，内存也会增加
             # batchify
-            sam_batched_input = [x['image'].cuda() for x in batched_inputs]
             sam_batched_input = [
                 {
-                    'image': x,
+                    'image': images.tensor[idx],
                     'point_coords': self.input_point,
                     'point_labels': self.input_label,
-                    'original_size': x.shape[1:]
-                } for x in sam_batched_input
+                    'original_size': images.image_sizes[idx]
+                } for idx in range(len(images))
             ]
             # LBK propagation
             # with torch.no_grad():
@@ -354,12 +353,12 @@ class FreeMix_BatchSAM(MaskFormer):
                 else:
                     sam_pre_masks = torch.cat((sam_masks, sam_pre_masks), dim=0)
 
+
             # 更换成IP_CLIP模型（maskCLIP）去一次性推理batch带mask的图片
             image_features = self.maskCLIP(clip_images_480, sam_pre_masks)
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
-        # print(dataset_name)
-        # print(class_names)
+
         if self.training:
             # ================
             # 使用任务prompt
@@ -407,48 +406,45 @@ class FreeMix_BatchSAM(MaskFormer):
                     losses[k] *= self.criterion.weight_dict[k]
 
             # mask aware loss
-            mask_results = outputs["pred_masks"]
-            gt_instances = [x["sem_instances"].to(self.device) for x in batched_inputs]
-            targets = self.prepare_targets(gt_instances, images)
-
-            clip_cls = outputs["pred_logits"]
-            logits_per_image = F.softmax(clip_cls[..., :-1], dim=-1)  # batch, num_of_mask, num_of_class
-
-            logits_per_instance = []  # bn * 100
-            labels_per_instance = []  # bn * h*w
-            masks_per_instance = []  # bn * 100 * h*w
-            assert len(targets) > 0, len(targets)
-            for b in range(len(targets)):
-                maski = mask_results[b].unsqueeze(0)
-                for i in range(targets[b]['masks'].shape[0]):
-                    logiti = logits_per_image[b, :, targets[b]['labels'][i]].unsqueeze(0)
-                    labeli = targets[b]['masks'][i].unsqueeze(0)
-                    logits_per_instance.append(logiti)
-                    labels_per_instance.append(labeli)
-                    masks_per_instance.append(maski)
-
-            if len(labels_per_instance) != 0:
-                masks_per_instance = torch.cat(masks_per_instance, dim=0)
-                labels_per_instance = torch.cat(labels_per_instance, dim=0)
-                logits_per_instance = torch.cat(logits_per_instance, dim=0)
-
-                ious = self.get_iou(masks_per_instance, labels_per_instance).detach()  # bs*100
-                ious = self.mynorm(ious)
-                ma_loss = self.ma_loss(logits_per_instance, ious)
-
-                losses['ma_loss'] = ma_loss*10
-            else:
-                losses['ma_loss'] = torch.tensor([0], device=self.device)
+            # mask_results = outputs["pred_masks"]
+            # gt_instances = [x["sem_instances"].to(self.device) for x in batched_inputs]
+            # targets = self.prepare_targets(gt_instances, images)
+            #
+            # clip_cls = outputs["pred_logits"]
+            # logits_per_image = F.softmax(clip_cls[..., :-1], dim=-1)  # batch, num_of_mask, num_of_class
+            #
+            # logits_per_instance = []  # bn * 100
+            # labels_per_instance = []  # bn * h*w
+            # masks_per_instance = []  # bn * 100 * h*w
+            # assert len(targets) > 0, len(targets)
+            # for b in range(len(targets)):
+            #     maski = mask_results[b].unsqueeze(0)
+            #     for i in range(targets[b]['masks'].shape[0]):
+            #         logiti = logits_per_image[b, :, targets[b]['labels'][i]].unsqueeze(0)
+            #         labeli = targets[b]['masks'][i].unsqueeze(0)
+            #         logits_per_instance.append(logiti)
+            #         labels_per_instance.append(labeli)
+            #         masks_per_instance.append(maski)
+            #
+            # if len(labels_per_instance) != 0:
+            #     masks_per_instance = torch.cat(masks_per_instance, dim=0)
+            #     labels_per_instance = torch.cat(labels_per_instance, dim=0)
+            #     logits_per_instance = torch.cat(logits_per_instance, dim=0)
+            #
+            #     ious = self.get_iou(masks_per_instance, labels_per_instance).detach()  # bs*100
+            #     ious = self.mynorm(ious)
+            #     ma_loss = self.ma_loss(logits_per_instance, ious)
+            #
+            #     losses['ma_loss'] = ma_loss*10
+            # else:
+            #     losses['ma_loss'] = torch.tensor([0], device=self.device)
 
             return losses
         else:
-            # ================
             # 使用任务prompt
-            # ================
             task_name = "semantic segmentation."
-            # ================
+
             # 使用数据源或场景prompt
-            # ================
             # task_name = scene_name
 
             text_features = self.clip_adapter.get_text_features(class_names, task_name)
@@ -507,8 +503,13 @@ class FreeMix_BatchSAM(MaskFormer):
                     text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
                 )
 
-                mask_cls_results = outputs["pred_logits"]
-                mask_pred_results = outputs["pred_masks"]
+                if self.sam_branch:
+                    # add sam branch result
+                    mask_cls_results = torch.cat((outputs["pred_logits"], clip_cls), dim=1)
+                    mask_pred_results = torch.cat((outputs["pred_masks"], sam_pre_masks), dim=1)
+                else:
+                    mask_cls_results = outputs["pred_logits"]
+                    mask_pred_results = outputs["pred_masks"]
 
                 mask_pred_results = F.interpolate(
                     mask_pred_results,
@@ -577,8 +578,13 @@ class FreeMix_BatchSAM(MaskFormer):
                     text_features, self.clip_adapter.normalize_feature(outputs["pred_logits"])
                 )
 
-                mask_cls_results = outputs["pred_logits"]
-                mask_pred_results = outputs["pred_masks"]
+                if self.sam_branch:
+                    # add sam branch result
+                    mask_cls_results = torch.cat((outputs["pred_logits"], clip_cls), dim=1)
+                    mask_pred_results = torch.cat((outputs["pred_masks"], sam_pre_masks), dim=1)
+                else:
+                    mask_cls_results = outputs["pred_logits"]
+                    mask_pred_results = outputs["pred_masks"]
 
                 mask_pred_results = F.interpolate(
                     mask_pred_results,

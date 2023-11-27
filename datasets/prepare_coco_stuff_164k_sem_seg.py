@@ -5,7 +5,7 @@ import shutil
 from functools import partial
 from glob import glob
 
-import mmcv
+import mmengine
 import numpy as np
 from PIL import Image
 
@@ -247,17 +247,17 @@ def main():
     )
 
     if args.nproc > 1:
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(convert_to_trainID, out_mask_dir=out_mask_dir, is_train=True),
             train_list,
             nproc=nproc,
         )
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(convert_to_trainID, out_mask_dir=out_mask_dir, is_train=False),
             test_list,
             nproc=nproc,
         )
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -269,7 +269,7 @@ def main():
             nproc=nproc,
         )
 
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -280,7 +280,7 @@ def main():
             test_list,
             nproc=nproc,
         )
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -291,7 +291,7 @@ def main():
             train_list,
             nproc=nproc,
         )
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -303,15 +303,15 @@ def main():
             nproc=nproc,
         )
     else:
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(convert_to_trainID, out_mask_dir=out_mask_dir, is_train=True),
             train_list,
         )
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(convert_to_trainID, out_mask_dir=out_mask_dir, is_train=False),
             test_list,
         )
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -321,7 +321,7 @@ def main():
             ),
             train_list,
         )
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -331,7 +331,7 @@ def main():
             ),
             test_list,
         )
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -341,7 +341,7 @@ def main():
             ),
             train_list,
         )
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,

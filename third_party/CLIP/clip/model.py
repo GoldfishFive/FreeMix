@@ -302,7 +302,8 @@ class ResidualAttentionBlock(nn.Module):
                 if xatten.shape[0] != mask.shape[-1]:
                     xattenmean = xatten[0].unsqueeze(0).repeat(mask.shape[-1] - xatten.shape[0], 1, 1)
                     xmean = x[0].unsqueeze(0).repeat(mask.shape[-1] - xatten.shape[0], 1, 1)
-                    assert mask.shape[-1] - xatten.shape[0] == 49, (mask.shape[-1], xatten.shape[0])
+                    # assert mask.shape[-1] - xatten.shape[0] == 49, (mask.shape[-1], xatten.shape[0])
+                    assert mask.shape[-1] - xatten.shape[0] == 99, (mask.shape[-1], xatten.shape[0])
                     xatten = torch.cat([xattenmean, xatten], dim=0)
                     x = torch.cat([xmean, x], dim=0)
 

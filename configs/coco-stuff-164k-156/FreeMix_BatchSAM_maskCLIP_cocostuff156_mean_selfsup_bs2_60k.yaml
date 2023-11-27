@@ -2,11 +2,11 @@ CUDNN_BENCHMARK: false
 TRAINER: "FreeMix_Trainer"
 GLOBAL:
   HACK: 1.0
-OUTPUT_DIR: ./freeseg_output/GID5Pot/FreeMix_BatchSAM_maskCLIP_GID5Pot_mean_selfsup_bs2_20k_test/
+OUTPUT_DIR: ./output/COCO/FreeMix_BatchSAM_maskCLIP_cocostuff156_mean_selfsup_bs2_60k/
 # misc
 LOADER:
   JOINT: True
-  KEY_DATASET: 'potsdam'
+  KEY_DATASET: 'coco_2017_train_full_task_base'
 DATASETS:
   DETECTIONS_PER_IMAGE: 100
   PRECOMPUTED_PROPOSAL_TOPK_TEST: 1000
@@ -15,117 +15,41 @@ DATASETS:
   PROPOSAL_FILES_TRAIN: []
   SAMPLE_PER_CLASS: -1
   SAMPLE_SEED: 0
-  TEST:
-  - GID_5_sem_seg_test
-  - potsdam_sem_seg_test
   TRAIN:
-  - GID_5_base_sem_seg_train
-  - potsdam_base_sem_seg_train
+    - coco_2017_train_full_task_base
+  TEST:
+#  - coco_2017_val_panoptic_with_sem_seg
+  - coco_2017_test_full_task_base
+
 MISSION_NAME:
   - semantic segmentation.
+  - instance segmentation.
+  - panoptic segmentation.
 SCENE_NAMES:
   - "streetscape"
   - "remote sensing"
-GID_5:
-  Scene_name: "remote sensing"
+COCO:
+  Scene_name: "nature"
   INPUT:
-    DATASET_MAPPER_NAME: GID_5_mask_former_semantic
-    COLOR_AUG_SSD: true
+    MIN_SIZE_TRAIN: !!python/object/apply:eval [ "[int(x * 0.1 * 640 ) for x in range(5, 16)]" ]
+    MIN_SIZE_TRAIN_SAMPLING: "choice"
+    MIN_SIZE_TEST: 512
+    MAX_SIZE_TRAIN: 2048
+    MAX_SIZE_TEST: 2048
     CROP:
-      ENABLED: true
+      ENABLED: True
+      TYPE: "absolute"
+      SIZE: (512, 512)
       SINGLE_CATEGORY_MAX_AREA: 1.0
-      SIZE:
-        - 512
-        - 512
-      TYPE: absolute
+    COLOR_AUG_SSD: True
+    SIZE_DIVISIBILITY: 512 # used in dataset mapper
+    DATASET_MAPPER_NAME: coco_full_lsj
     FORMAT: RGB
     IMAGE_SIZE: 1024
     MASK_FORMAT: polygon
     MAX_SCALE: 2.0
-    MAX_SIZE_TEST: 2048
-    MAX_SIZE_TRAIN: 2048
     MIN_SCALE: 0.1
-    MIN_SIZE_TEST: 512
-    MIN_SIZE_TRAIN:
-      - 320
-      - 384
-      - 448
-      - 512
-      - 576
-      - 640
-      - 704
-      - 768
-      - 832
-      - 896
-      - 960
-    MIN_SIZE_TRAIN_SAMPLING: choice
     RANDOM_FLIP: horizontal
-    SIZE_DIVISIBILITY: 512
-  TEST:
-    AUG:
-      ENABLED: false
-      FLIP: true
-      MAX_SIZE: 3584
-      MIN_SIZES:
-        - 256
-        - 384
-        - 512
-        - 640
-        - 768
-        - 896
-    DENSE_CRF: false
-    EVAL_PERIOD: 10000
-    EXPECTED_RESULTS: [ ]
-    KEYPOINT_OKS_SIGMAS: [ ]
-    OPTIM:
-      LR: 0.001
-    PRECISE_BN:
-      ENABLED: false
-      NUM_ITER: 200
-    SLIDING_OVERLAP: 0.6666666666666666
-    SLIDING_TILE_SIZE: 224
-    SLIDING_WINDOW: false
-  DATALOADER:
-    ASPECT_RATIO_GROUPING: true
-    FILTER_EMPTY_ANNOTATIONS: true
-    NUM_WORKERS: 4
-    REPEAT_THRESHOLD: 0.0
-    SAMPLER_TRAIN: TrainingSampler
-Potsdam:
-  Scene_name: "remote sensing"
-  INPUT:
-    DATASET_MAPPER_NAME: potsdam_mask_former_semantic
-    COLOR_AUG_SSD: true
-    CROP:
-      ENABLED: true
-      SINGLE_CATEGORY_MAX_AREA: 1.0
-      SIZE:
-        - 512
-        - 512
-      TYPE: absolute
-    FORMAT: RGB
-    IMAGE_SIZE: 1024
-    MASK_FORMAT: polygon
-    MAX_SCALE: 2.0
-    MAX_SIZE_TEST: 2048
-    MAX_SIZE_TRAIN: 2048
-    MIN_SCALE: 0.1
-    MIN_SIZE_TEST: 512
-    MIN_SIZE_TRAIN:
-      - 320
-      - 384
-      - 448
-      - 512
-      - 576
-      - 640
-      - 704
-      - 768
-      - 832
-      - 896
-      - 960
-    MIN_SIZE_TRAIN_SAMPLING: choice
-    RANDOM_FLIP: horizontal
-    SIZE_DIVISIBILITY: 512
   TEST:
     AUG:
       ENABLED: false
@@ -172,7 +96,7 @@ SOLVER:
   GAMMA: 0.1
   IMS_PER_BATCH: 2  # 训练时，每个数据集的batchsize大小
   LR_SCHEDULER_NAME: WarmupPolyLR
-  MAX_ITER: 20000
+  MAX_ITER: 60000
   MOMENTUM: 0.9
   NESTEROV: false
   NUM_DECAYS: 3
@@ -277,11 +201,11 @@ MODEL:
     PRE_NORM: false
     SIZE_DIVISIBILITY: 32
     TEST:
-      INSTANCE_ON: false
+      INSTANCE_ON: true
       OBJECT_MASK_THRESHOLD: 0.8
       OVERLAP_THRESHOLD: 0.8
-      PANOPTIC_ON: false
-      SEMANTIC_ON: false
+      PANOPTIC_ON: true
+      SEMANTIC_ON: true
       SEM_SEG_POSTPROCESSING_BEFORE_INFERENCE: false
     TRAIN_NUM_POINTS: 12544
     TRANSFORMER_DECODER_NAME: MultiScaleMaskedTransformerDecoder

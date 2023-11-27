@@ -9,7 +9,7 @@ from glob import glob
 
 from panopticapi.utils import rgb2id, id2rgb
 
-import mmcv
+import mmengine
 import numpy as np
 from PIL import Image
 
@@ -365,7 +365,7 @@ def main():
     if args.nproc > 1:
         train_obj_annos_copy = copy.deepcopy(train_obj_annos)
         
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -383,7 +383,7 @@ def main():
             json.dump(train_obj_all, f)
 
         val_obj_annos_copy = copy.deepcopy(val_obj_annos)
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir, 
@@ -401,7 +401,7 @@ def main():
             json.dump(val_obj_all, f)
 
         train_obj_annos_copy = copy.deepcopy(train_obj_annos)
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -421,7 +421,7 @@ def main():
             json.dump(train_obj_all, f)
 
         val_obj_annos_copy = copy.deepcopy(val_obj_annos)
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -441,7 +441,7 @@ def main():
             json.dump(val_obj_all, f)
 
         train_obj_annos_copy = copy.deepcopy(train_obj_annos)
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -461,7 +461,7 @@ def main():
             json.dump(train_obj_all, f)
 
         val_obj_annos_copy = copy.deepcopy(val_obj_annos)
-        mmcv.track_parallel_progress(
+        mmengine.track_parallel_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -482,7 +482,7 @@ def main():
 
     else:
         train_obj_annos_copy = copy.deepcopy(train_obj_annos)
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID, 
                 out_mask_dir=out_mask_dir, 
@@ -498,7 +498,7 @@ def main():
             json.dump(train_obj_all, f)
 
         val_obj_annos_copy = copy.deepcopy(val_obj_annos)
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir, 
@@ -514,7 +514,7 @@ def main():
             json.dump(val_obj_all, f)
 
         train_obj_annos_copy = copy.deepcopy(train_obj_annos)
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -533,7 +533,7 @@ def main():
             json.dump(train_obj_all, f)
 
         val_obj_annos_copy = copy.deepcopy(val_obj_annos)
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -552,7 +552,7 @@ def main():
             json.dump(val_obj_all, f)
 
         train_obj_annos_copy = copy.deepcopy(train_obj_annos)
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -571,7 +571,7 @@ def main():
             json.dump(train_obj_all, f)
 
         val_obj_annos_copy = copy.deepcopy(val_obj_annos)
-        mmcv.track_progress(
+        mmengine.track_progress(
             partial(
                 convert_to_trainID,
                 out_mask_dir=out_mask_dir,
@@ -594,3 +594,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+'''
+/media/sda/wjy/miniconda3/envs/freemix/bin/python /media/sda/wjy/projects/FreeMix/datasets/prepare_coco_alldata.py /media/sda/wjy/datasets/coco/ 
+{0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 12: 11, 13: 12, 14: 13, 15: 14, 16: 15, 17: 16, 18: 17, 19: 18, 20: 19, 21: 20, 22: 21, 23: 22, 24: 23, 26: 24, 27: 25, 30: 26, 31: 27, 32: 28, 33: 29, 34: 30, 35: 31, 36: 32, 37: 33, 38: 34, 39: 35, 40: 36, 41: 37, 42: 38, 43: 39, 45: 40, 46: 41, 47: 42, 48: 43, 49: 44, 50: 45, 51: 46, 52: 47, 53: 48, 54: 49, 55: 50, 56: 51, 57: 52, 58: 53, 59: 54, 60: 55, 61: 56, 62: 57, 63: 58, 64: 59, 66: 60, 69: 61, 71: 62, 72: 63, 73: 64, 74: 65, 75: 66, 76: 67, 77: 68, 78: 69, 79: 70, 80: 71, 81: 72, 83: 73, 84: 74, 85: 75, 86: 76, 87: 77, 88: 78, 89: 79, 91: 80, 92: 81, 93: 82, 94: 83, 95: 84, 96: 85, 97: 86, 98: 87, 99: 88, 100: 89, 101: 90, 102: 91, 103: 92, 104: 93, 105: 94, 106: 95, 107: 96, 108: 97, 109: 98, 110: 99, 111: 100, 112: 101, 113: 102, 114: 103, 115: 104, 116: 105, 117: 106, 118: 107, 119: 108, 120: 109, 121: 110, 122: 111, 123: 112, 124: 113, 125: 114, 126: 115, 127: 116, 128: 117, 129: 118, 130: 119, 131: 120, 132: 121, 133: 122, 134: 123, 135: 124, 136: 125, 137: 126, 138: 127, 139: 128, 140: 129, 141: 130, 142: 131, 143: 132, 144: 133, 145: 134, 146: 135, 147: 136, 148: 137, 149: 138, 150: 139, 151: 140, 152: 141, 153: 142, 154: 143, 155: 144, 156: 145, 157: 146, 158: 147, 159: 148, 160: 149, 161: 150, 162: 151, 163: 152, 164: 153, 165: 154, 166: 155, 167: 156, 168: 157, 169: 158, 170: 159, 171: 160, 172: 161, 173: 162, 174: 163, 175: 164, 176: 165, 177: 166, 178: 167, 179: 168, 180: 169, 181: 170, 255: 255}
+{0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, 12: 11, 13: 12, 14: 13, 15: 14, 16: 15, 17: 16, 18: 17, 19: 18, 21: 19, 22: 20, 23: 21, 26: 22, 27: 23, 30: 24, 31: 25, 34: 26, 35: 27, 36: 28, 37: 29, 38: 30, 39: 31, 41: 32, 42: 33, 43: 34, 45: 35, 46: 36, 47: 37, 48: 38, 49: 39, 50: 40, 51: 41, 52: 42, 53: 43, 54: 44, 55: 45, 57: 46, 58: 47, 59: 48, 60: 49, 61: 50, 62: 51, 63: 52, 64: 53, 66: 54, 69: 55, 71: 56, 72: 57, 73: 58, 74: 59, 75: 60, 76: 61, 77: 62, 78: 63, 79: 64, 80: 65, 81: 66, 83: 67, 84: 68, 85: 69, 87: 70, 88: 71, 89: 72, 91: 73, 92: 74, 93: 75, 94: 76, 95: 77, 96: 78, 97: 79, 98: 80, 100: 81, 101: 82, 102: 83, 103: 84, 104: 85, 106: 86, 107: 87, 108: 88, 109: 89, 110: 90, 111: 91, 112: 92, 113: 93, 114: 94, 115: 95, 116: 96, 117: 97, 118: 98, 119: 99, 120: 100, 121: 101, 122: 102, 124: 103, 125: 104, 126: 105, 127: 106, 128: 107, 129: 108, 130: 109, 131: 110, 132: 111, 133: 112, 134: 113, 135: 114, 136: 115, 137: 116, 138: 117, 139: 118, 140: 119, 141: 120, 142: 121, 143: 122, 145: 123, 146: 124, 149: 125, 150: 126, 151: 127, 152: 128, 153: 129, 154: 130, 155: 131, 156: 132, 157: 133, 158: 134, 159: 135, 160: 136, 161: 137, 162: 138, 163: 139, 164: 140, 165: 141, 166: 142, 167: 143, 169: 144, 170: 145, 172: 146, 173: 147, 174: 148, 175: 149, 176: 150, 177: 151, 178: 152, 179: 153, 180: 154, 181: 155}
+{20: 0, 24: 1, 32: 2, 33: 3, 40: 4, 56: 5, 86: 6, 99: 7, 105: 8, 123: 9, 144: 10, 147: 11, 148: 12, 168: 13, 171: 14}
+[>>>>>>>>>>>>>>>>>>>>>] 118287/118287, 19.7 task/s, elapsed: 6018s, ETA:     0s
+[>>>>>>>>>>>>>>>>>>>>>>>>>>] 5000/5000, 18.4 task/s, elapsed: 271s, ETA:     0s
+[>>>>>>>>>>>>>>>>>>>>>] 118287/118287, 24.8 task/s, elapsed: 4767s, ETA:     0s
+[>>>>>>>>>>>>>>>>>>>>>>>>>>] 5000/5000, 22.8 task/s, elapsed: 219s, ETA:     0s
+[>>>>>>>>>>>>>>>>>>>>>] 118287/118287, 84.0 task/s, elapsed: 1408s, ETA:     0s
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>] 5000/5000, 85.3 task/s, elapsed: 59s, ETA:     0s
+Done!
+'''
